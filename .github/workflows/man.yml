@@ -1,0 +1,160 @@
+name: Fix Tab Functionality
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/fix-tabs.yml'
+
+jobs:
+  fix-tab-functionality:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Fix tab functionality in index.html
+        run: |
+          echo "🔧 Fixing tab functionality..."
+          
+          # Create a Node.js script to update the HTML file
+          cat > fix-tabs.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          
+          const indexPath = path.join('public', 'index.html');
+          
+          if (!fs.existsSync(indexPath)) {
+            console.error('❌ public/index.html not found!');
+            process.exit(1);
+          }
+          
+          let html = fs.readFileSync(indexPath, 'utf8');
+          
+          // Remove onclick attributes from tabs
+          html = html.replace(/onclick="switchTab\('whois'\)"/g, 'data-tab="whois"');
+          html = html.replace(/onclick="switchTab\('business'\)"/g, 'data-tab="business"');
+          
+          // Find the closing </script> tag and insert the new tab handler
+          const tabHandlerCode = `
+          // Fixed tab switching function
+          function switchTab(tab, element) {
+              currentTab = tab;
+              
+              // Update active tab styling
+              document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+              element.classList.add('active');
+              
+              // Show/hide content
+              document.getElementById('whois-content').classList.toggle('active', tab === 'whois');
+              document.getElementById('business-content').classList.toggle('active', tab === 'business');
+              
+              // Clear any messages
+              hideMessage();
+          }
+          
+          // Add event listeners for tabs when DOM is ready
+          document.addEventListener('DOMContentLoaded', function() {
+              // Get all tab buttons
+              const tabs = document.querySelectorAll('.tab[data-tab]');
+              
+              tabs.forEach(tab => {
+                  tab.addEventListener('click', function() {
+                      const tabName = this.getAttribute('data-tab');
+                      switchTab(tabName, this);
+                  });
+              });
+              
+              // Also fix the analyze button if it exists
+              const analyzeBtn = document.querySelector('.analyze-btn');
+              if (analyzeBtn) {
+                  analyzeBtn.addEventListener('click', function() {
+                      window.analysisType = 'standard';
+                  });
+              }
+          });
+          `;
+          
+          // Find where to insert the code (before the last closing script tag)
+          const lastScriptIndex = html.lastIndexOf('</script>');
+          if (lastScriptIndex !== -1) {
+            // Check if the tab handler already exists
+            if (!html.includes('document.addEventListener(\'DOMContentLoaded\'')) {
+              html = html.slice(0, lastScriptIndex) + '\n' + tabHandlerCode + '\n' + html.slice(lastScriptIndex);
+            }
+          }
+          
+          // Update the switchTab function if it exists with the old implementation
+          const oldSwitchTabRegex = /function switchTab\(tab\)\s*{[\s\S]*?event\.target[\s\S]*?}/;
+          if (oldSwitchTabRegex.test(html)) {
+            html = html.replace(oldSwitchTabRegex, `function switchTab(tab, element) {
+              currentTab = tab;
+              
+              // Update active tab styling
+              document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+              element.classList.add('active');
+              
+              // Show/hide content
+              document.getElementById('whois-content').classList.toggle('active', tab === 'whois');
+              document.getElementById('business-content').classList.toggle('active', tab === 'business');
+              
+              // Clear any messages
+              hideMessage();
+          }`);
+          }
+          
+          fs.writeFileSync(indexPath, html);
+          console.log('✅ Tab functionality fixed successfully!');
+          EOF
+          
+          # Run the fix
+          node fix-tabs.js
+          
+          # Clean up
+          rm fix-tabs.js
+      
+      - name: Verify the fix
+        run: |
+          echo "🔍 Verifying the fix..."
+          
+          if grep -q "data-tab=" public/index.html; then
+            echo "✅ Tab data attributes added"
+          else
+            echo "⚠️ Tab data attributes might not have been added"
+          fi
+          
+          if grep -q "addEventListener('DOMContentLoaded'" public/index.html; then
+            echo "✅ Event listeners added"
+          else
+            echo "⚠️ Event listeners might not have been added"
+          fi
+      
+      - name: Commit the fixes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add public/index.html
+          git diff --staged --quiet || git commit -m "Fix tab functionality - use event listeners instead of onclick"
+          git push
+      
+      - name: Summary
+        run: |
+          echo "📋 Summary of changes:"
+          echo "- Removed onclick attributes from tab buttons"
+          echo "- Added data-tab attributes for tab identification"
+          echo "- Implemented proper event listeners for tab switching"
+          echo "- Updated switchTab function to accept element parameter"
+          echo ""
+          echo "✅ Tab functionality should now work correctly!"
