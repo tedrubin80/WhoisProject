@@ -1,0 +1,750 @@
+name: Setup WHOIS Intelligence Server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/setup-project.yml'
+
+jobs:
+  setup-project:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Create project structure
+        run: |
+          echo "📁 Creating directory structure..."
+          mkdir -p utils/business-profile
+          mkdir -p routes
+          mkdir -p public
+          mkdir -p .github/workflows
+      
+      - name: Create package.json
+        run: |
+          cat > package.json << 'EOF'
+          {
+            "name": "whois-intelligence-server",
+            "version": "2.3.0",
+            "description": "Enhanced WHOIS Intelligence Server with Business Profile Checker",
+            "main": "server.js",
+            "scripts": {
+              "start": "node server.js",
+              "dev": "nodemon server.js"
+            },
+            "keywords": ["whois", "domain", "dns", "business-checker"],
+            "author": "Your Name",
+            "license": "MIT",
+            "dependencies": {
+              "express": "^4.18.2",
+              "cors": "^2.8.5",
+              "helmet": "^7.1.0",
+              "compression": "^1.7.4",
+              "express-rate-limit": "^7.1.5",
+              "morgan": "^1.10.0",
+              "dotenv": "^16.3.1",
+              "axios": "^1.6.2",
+              "node-cache": "^5.1.2",
+              "whois": "^2.13.9",
+              "geoip-lite": "^1.4.7",
+              "cheerio": "^1.0.0-rc.12"
+            },
+            "engines": {
+              "node": ">=16.0.0"
+            }
+          }
+          EOF
+      
+      - name: Create server.js
+        run: |
+          cat > server.js << 'EOF'
+          /**
+           * Enhanced WHOIS Intelligence Server with Business Profile Checker
+           * Version: 2.3.0
+           */
+          
+          const express = require('express');
+          const cors = require('cors');
+          const helmet = require('helmet');
+          const compression = require('compression');
+          const rateLimit = require('express-rate-limit');
+          const morgan = require('morgan');
+          const path = require('path');
+          const dns = require('dns').promises;
+          const whois = require('whois');
+          require('dotenv').config();
+          
+          const app = express();
+          const PORT = process.env.PORT || 3001;
+          
+          // Import business routes
+          const businessRoutes = require('./routes/business-routes');
+          
+          // Middleware
+          app.use(helmet({
+            contentSecurityPolicy: {
+              directives: {
+                defaultSrc: ["'self'"],
+                styleSrc: ["'self'", "'unsafe-inline'"],
+                scriptSrc: ["'self'", "'unsafe-inline'"],
+                imgSrc: ["'self'", "data:", "https:"],
+              },
+            },
+          }));
+          
+          app.use(compression());
+          app.use(cors());
+          app.use(express.json({ limit: '10mb' }));
+          app.use(express.static('public'));
+          app.use(morgan('combined'));
+          
+          // Cache
+          const NodeCache = require('node-cache');
+          const cache = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
+          
+          // Rate limiting
+          const limiter = rateLimit({
+            windowMs: 15 * 60 * 1000,
+            max: 100,
+            standardHeaders: true,
+            legacyHeaders: false,
+          });
+          
+          app.use('/api/', limiter);
+          
+          // API Key Authentication
+          const authenticateAPIKey = (req, res, next) => {
+            const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+            const validApiKeys = [
+              'demo-key-12345678',
+              process.env.API_KEY_1,
+              process.env.API_KEY_2,
+              process.env.API_KEY_3
+            ].filter(Boolean);
+          
+            if (!apiKey || !validApiKeys.includes(apiKey)) {
+              return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Valid API key required'
+              });
+            }
+            
+            next();
+          };
+          
+          // Helper Functions
+          async function performWhoisLookup(domain) {
+            return new Promise((resolve, reject) => {
+              whois.lookup(domain, (err, data) => {
+                if (err) reject(err);
+                else resolve(data);
+              });
+            });
+          }
+          
+          async function performDNSLookup(domain, recordType) {
+            try {
+              switch (recordType) {
+                case 'A':
+                  return await dns.resolve4(domain);
+                case 'AAAA':
+                  return await dns.resolve6(domain);
+                case 'MX':
+                  return await dns.resolveMx(domain);
+                case 'TXT':
+                  return await dns.resolveTxt(domain);
+                case 'NS':
+                  return await dns.resolveNs(domain);
+                case 'CNAME':
+                  return await dns.resolveCname(domain);
+                case 'SOA':
+                  return await dns.resolveSoa(domain);
+                default:
+                  return [];
+              }
+            } catch (error) {
+              console.error(`DNS ${recordType} lookup error for ${domain}:`, error.message);
+              return [];
+            }
+          }
+          
+          async function getAllDNSRecords(domain) {
+            const recordTypes = ['A', 'AAAA', 'MX', 'TXT', 'NS', 'CNAME', 'SOA'];
+            const results = {};
+          
+            await Promise.all(
+              recordTypes.map(async (type) => {
+                try {
+                  results[type] = await performDNSLookup(domain, type);
+                } catch (error) {
+                  results[type] = [];
+                }
+              })
+            );
+          
+            return results;
+          }
+          
+          function parseWhoisData(whoisText) {
+            const parsed = {};
+            const lines = whoisText.split('\n');
+            
+            const patterns = {
+              registrar: /registrar:\s*(.+)/i,
+              creationDate: /creat(?:ed|ion)(?: date)?:\s*(.+)/i,
+              expirationDate: /expir(?:y|ation|es)(?: date)?:\s*(.+)/i,
+              nameServers: /name server:\s*(.+)/i,
+              registrantName: /registrant(?: name)?:\s*(.+)/i,
+              registrantOrg: /registrant(?: organization)?:\s*(.+)/i,
+              registrantEmail: /registrant email:\s*(.+)/i,
+              status: /status:\s*(.+)/i
+            };
+          
+            lines.forEach(line => {
+              for (const [key, pattern] of Object.entries(patterns)) {
+                const match = line.match(pattern);
+                if (match) {
+                  if (key === 'nameServers') {
+                    if (!parsed.nameServers) parsed.nameServers = [];
+                    parsed.nameServers.push(match[1].trim());
+                  } else {
+                    parsed[key] = match[1].trim();
+                  }
+                }
+              }
+            });
+          
+            return parsed;
+          }
+          
+          function calculateDomainAge(creationDate) {
+            if (!creationDate) return null;
+            
+            try {
+              const created = new Date(creationDate);
+              const now = new Date();
+              const ageInDays = Math.floor((now - created) / (1000 * 60 * 60 * 24));
+              return ageInDays;
+            } catch (error) {
+              return null;
+            }
+          }
+          
+          function analyzePrivacyProtection(whoisData) {
+            const privacyIndicators = [
+              'privacy protect',
+              'whois guard',
+              'whois privacy',
+              'domains by proxy',
+              'contact privacy',
+              'data protected',
+              'redacted for privacy',
+              'privacy service',
+              'not disclosed'
+            ];
+            
+            const whoisText = JSON.stringify(whoisData).toLowerCase();
+            const hasPrivacy = privacyIndicators.some(indicator => whoisText.includes(indicator));
+            
+            return {
+              hasPrivacy,
+              type: hasPrivacy ? 'Privacy Protection Enabled' : null
+            };
+          }
+          
+          // Routes
+          app.get('/health', (req, res) => {
+            res.json({
+              status: 'healthy',
+              timestamp: new Date().toISOString(),
+              uptime: process.uptime(),
+              version: '2.3.0'
+            });
+          });
+          
+          app.post('/api/analyze', authenticateAPIKey, async (req, res) => {
+            try {
+              const { domain } = req.body;
+              
+              if (!domain) {
+                return res.status(400).json({ error: 'Domain is required' });
+              }
+          
+              const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+              
+              const cacheKey = `whois_${cleanDomain}`;
+              const cachedData = cache.get(cacheKey);
+              if (cachedData) {
+                return res.json({ ...cachedData, fromCache: true });
+              }
+          
+              const whoisRaw = await performWhoisLookup(cleanDomain);
+              const whoisData = parseWhoisData(whoisRaw);
+              const dnsRecords = await getAllDNSRecords(cleanDomain);
+              const privacyProtection = analyzePrivacyProtection(whoisData);
+              const domainAge = calculateDomainAge(whoisData.creationDate);
+              
+              const result = {
+                domain: cleanDomain,
+                whoisData,
+                dnsRecords,
+                privacyProtection,
+                domainAge,
+                analysis: {
+                  isNewDomain: domainAge && domainAge < 30,
+                  hasPrivacyProtection: privacyProtection.hasPrivacy,
+                  hasMXRecords: dnsRecords.MX && dnsRecords.MX.length > 0,
+                  nameServerCount: whoisData.nameServers ? whoisData.nameServers.length : 0
+                },
+                timestamp: new Date().toISOString()
+              };
+              
+              cache.set(cacheKey, result);
+              res.json(result);
+            } catch (error) {
+              console.error('Domain analysis error:', error);
+              res.status(500).json({
+                error: 'Analysis failed',
+                message: error.message
+              });
+            }
+          });
+          
+          // Business Profile Checker Routes
+          app.use(businessRoutes);
+          
+          // Static Files
+          app.get('/', (req, res) => {
+            res.sendFile(path.join(__dirname, 'public', 'index.html'));
+          });
+          
+          // Error Handler
+          app.use((err, req, res, next) => {
+            console.error('Server error:', err);
+            res.status(500).json({
+              error: 'Internal server error',
+              message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred'
+            });
+          });
+          
+          // Start Server
+          app.listen(PORT, () => {
+            console.log(`🚀 WHOIS Intelligence Server v2.3.0 running on port ${PORT}`);
+            console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`🔐 API Key authentication: Enabled`);
+            console.log(`💼 Business Profile Checker: Enabled`);
+            console.log(`🌐 Access at: http://localhost:${PORT}`);
+          });
+          EOF
+      
+      - name: Create Business Profile Checker module
+        run: |
+          cat > utils/business-profile/checker.js << 'EOF'
+          const axios = require('axios');
+          const cheerio = require('cheerio');
+          
+          class BusinessProfileChecker {
+            constructor() {
+              this.userAgents = [
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+              ];
+              
+              this.axiosConfig = {
+                timeout: 20000,
+                maxRedirects: 5,
+                validateStatus: (status) => status < 500,
+                headers: {
+                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                  'Accept-Language': 'en-US,en;q=0.9',
+                  'Accept-Encoding': 'gzip, deflate, br',
+                  'DNT': '1',
+                  'Connection': 'keep-alive',
+                  'Upgrade-Insecure-Requests': '1'
+                }
+              };
+            }
+            
+            getRandomUserAgent() {
+              return this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
+            }
+            
+            identifyPlatform(url) {
+              const urlLower = url.toLowerCase();
+              
+              const platforms = {
+                'instagram.com': 'Instagram',
+                'facebook.com': 'Facebook',
+                'linkedin.com': 'LinkedIn',
+                'twitter.com': 'Twitter',
+                'youtube.com': 'YouTube',
+                'tiktok.com': 'TikTok'
+              };
+              
+              for (const [domain, platform] of Object.entries(platforms)) {
+                if (urlLower.includes(domain)) {
+                  return platform;
+                }
+              }
+              
+              return 'Website';
+            }
+            
+            async validateURL(url) {
+              try {
+                const response = await axios.get(url, {
+                  ...this.axiosConfig,
+                  headers: {
+                    ...this.axiosConfig.headers,
+                    'User-Agent': this.getRandomUserAgent()
+                  }
+                });
+                
+                if (response.status === 200) {
+                  return {
+                    status: '✅ VALID',
+                    valid: true,
+                    code: response.status
+                  };
+                } else if ([301, 302, 307, 308].includes(response.status)) {
+                  return {
+                    status: '🔄 REDIRECTS',
+                    valid: true,
+                    code: response.status,
+                    reason: 'Website redirects'
+                  };
+                } else {
+                  return {
+                    status: '❌ INVALID',
+                    valid: false,
+                    code: response.status,
+                    reason: `HTTP ${response.status}`
+                  };
+                }
+              } catch (error) {
+                return {
+                  status: '⚠️ ERROR',
+                  valid: false,
+                  reason: error.message
+                };
+              }
+            }
+            
+            async fetchHTML(url) {
+              try {
+                const response = await axios.get(url, {
+                  ...this.axiosConfig,
+                  headers: {
+                    ...this.axiosConfig.headers,
+                    'User-Agent': this.getRandomUserAgent()
+                  }
+                });
+                return response.data;
+              } catch (error) {
+                console.error(`Error fetching HTML for ${url}:`, error.message);
+                return '';
+              }
+            }
+            
+            extractBusinessName(url, html) {
+              const $ = cheerio.load(html);
+              let businessName = 'Unknown Business';
+              
+              businessName = $('meta[property="og:site_name"]').attr('content') ||
+                            $('meta[property="og:title"]').attr('content') ||
+                            $('title').text() ||
+                            businessName;
+              
+              return businessName.trim();
+            }
+            
+            extractContactInfo(html, url) {
+              const $ = cheerio.load(html);
+              const contactInfo = {
+                emails: [],
+                phones: [],
+                social_media: {},
+                address: null
+              };
+              
+              const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+              const emails = html.match(emailRegex) || [];
+              contactInfo.emails = [...new Set(emails)].filter(email => !email.includes('example.com'));
+              
+              const phoneRegex = /(\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
+              const phones = html.match(phoneRegex) || [];
+              contactInfo.phones = [...new Set(phones)];
+              
+              return contactInfo;
+            }
+            
+            async processURL(url) {
+              try {
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                  url = 'https://' + url;
+                }
+                
+                const validity = await this.validateURL(url);
+                
+                let businessName = 'Unknown Business';
+                let contactInfo = { emails: [], phones: [], social_media: {}, address: null };
+                let platform = this.identifyPlatform(url);
+                
+                if (validity.valid) {
+                  const html = await this.fetchHTML(url);
+                  businessName = this.extractBusinessName(url, html);
+                  contactInfo = this.extractContactInfo(html, url);
+                }
+                
+                return {
+                  url: url,
+                  business_name: businessName,
+                  platform: platform,
+                  validity: validity,
+                  contact_info: contactInfo,
+                  checked_at: new Date().toISOString()
+                };
+                
+              } catch (error) {
+                return {
+                  url: url,
+                  business_name: 'Error',
+                  platform: this.identifyPlatform(url),
+                  validity: {
+                    status: '⚠️ ERROR',
+                    valid: false,
+                    reason: error.message
+                  },
+                  contact_info: {
+                    emails: [],
+                    phones: [],
+                    social_media: {},
+                    address: null
+                  },
+                  checked_at: new Date().toISOString()
+                };
+              }
+            }
+          }
+          
+          module.exports = BusinessProfileChecker;
+          EOF
+      
+      - name: Create Business Routes
+        run: |
+          cat > routes/business-routes.js << 'EOF'
+          const express = require('express');
+          const router = express.Router();
+          const BusinessProfileChecker = require('../utils/business-profile/checker');
+          
+          const checker = new BusinessProfileChecker();
+          
+          const authenticateAPIKey = (req, res, next) => {
+            const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+            const validApiKeys = [
+              'demo-key-12345678',
+              process.env.API_KEY_1,
+              process.env.API_KEY_2,
+              process.env.API_KEY_3
+            ].filter(Boolean);
+          
+            if (!apiKey || !validApiKeys.includes(apiKey)) {
+              return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Valid API key required'
+              });
+            }
+            
+            next();
+          };
+          
+          router.post('/api/business/check', authenticateAPIKey, async (req, res) => {
+            try {
+              const { url } = req.body;
+              
+              if (!url) {
+                return res.status(400).json({ error: 'URL is required' });
+              }
+              
+              const result = await checker.processURL(url);
+              
+              res.json({
+                success: true,
+                data: result,
+                timestamp: new Date().toISOString()
+              });
+              
+            } catch (error) {
+              console.error('Business check error:', error);
+              res.status(500).json({
+                success: false,
+                error: error.message
+              });
+            }
+          });
+          
+          router.post('/api/business/bulk-check', authenticateAPIKey, async (req, res) => {
+            try {
+              const { urls } = req.body;
+              
+              if (!urls || !Array.isArray(urls) || urls.length === 0) {
+                return res.status(400).json({ error: 'URLs array is required' });
+              }
+              
+              if (urls.length > 50) {
+                return res.status(400).json({ error: 'Maximum 50 URLs allowed per request' });
+              }
+              
+              const results = [];
+              
+              for (let i = 0; i < urls.length; i++) {
+                const url = urls[i];
+                
+                try {
+                  const result = await checker.processURL(url);
+                  results.push(result);
+                  
+                  if (i < urls.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                  }
+                } catch (error) {
+                  results.push({
+                    url: url,
+                    error: error.message,
+                    validity: {
+                      status: '⚠️ ERROR',
+                      valid: false,
+                      reason: error.message
+                    }
+                  });
+                }
+              }
+              
+              res.json({
+                success: true,
+                data: {
+                  results: results,
+                  summary: {
+                    total: results.length,
+                    valid: results.filter(r => r.validity?.valid).length,
+                    invalid: results.filter(r => !r.validity?.valid && !r.error).length,
+                    errors: results.filter(r => r.error).length
+                  }
+                },
+                timestamp: new Date().toISOString()
+              });
+              
+            } catch (error) {
+              console.error('Bulk check error:', error);
+              res.status(500).json({
+                success: false,
+                error: error.message
+              });
+            }
+          });
+          
+          module.exports = router;
+          EOF
+      
+      - name: Copy index.html from document
+        run: |
+          # The index.html should already exist in the public folder
+          # If not, create a placeholder
+          if [ ! -f public/index.html ]; then
+            echo "<!DOCTYPE html><html><head><title>WHOIS Intelligence</title></head><body><h1>WHOIS Intelligence Server</h1></body></html>" > public/index.html
+          fi
+      
+      - name: Create .gitignore
+        run: |
+          cat > .gitignore << 'EOF'
+          node_modules/
+          .env
+          .env.local
+          npm-debug.log*
+          yarn-debug.log*
+          yarn-error.log*
+          .DS_Store
+          *.log
+          logs/
+          *.pid
+          *.seed
+          *.pid.lock
+          .npm
+          .eslintcache
+          EOF
+      
+      - name: Create README.md
+        run: |
+          cat > README.md << 'EOF'
+          # WHOIS Intelligence Server
+          
+          Enhanced WHOIS Intelligence Server with Business Profile Checker
+          
+          ## Features
+          
+          - Domain WHOIS lookup and analysis
+          - DNS record checking
+          - Business profile validation
+          - Contact information extraction
+          - Bulk URL checking
+          
+          ## Setup
+          
+          1. Install dependencies:
+          ```bash
+          npm install
+          ```
+          
+          2. Create `.env` file:
+          ```
+          API_KEY_1=demo-key-12345678
+          API_KEY_2=your-key-2
+          API_KEY_3=your-key-3
+          ```
+          
+          3. Run the server:
+          ```bash
+          npm start
+          ```
+          
+          ## API Endpoints
+          
+          - `GET /health` - Health check
+          - `POST /api/analyze` - WHOIS domain analysis
+          - `POST /api/business/check` - Single business URL check
+          - `POST /api/business/bulk-check` - Bulk business URL check
+          
+          ## Deployment
+          
+          This project is ready for deployment on Railway.app
+          EOF
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Create deployment info
+        run: |
+          echo "✅ Project setup complete!" > deployment-info.txt
+          echo "Repository structure:" >> deployment-info.txt
+          find . -type f -name "*.js" -o -name "*.json" -o -name "*.html" | grep -v node_modules >> deployment-info.txt
+      
+      - name: Commit all changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          git diff --staged --quiet || git commit -m "Setup complete project structure for Railway deployment"
+          git push
