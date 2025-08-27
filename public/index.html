@@ -531,8 +531,8 @@
 
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('whois')">WHOIS Intelligence</button>
-            <button class="tab" onclick="switchTab('business')">Business Checker</button>
+            <button class="tab active" data-tab="whois">WHOIS Intelligence</button>
+            <button class="tab" data-tab="business">Business Checker</button>
         </div>
 
         <!-- Message Area -->
@@ -729,20 +729,20 @@
         let currentTab = 'whois';
 
         // Tab switching
-        function switchTab(tab) {
-            currentTab = tab;
-            
-            // Update active tab styling
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            // Show/hide content
-            document.getElementById('whois-content').classList.toggle('active', tab === 'whois');
-            document.getElementById('business-content').classList.toggle('active', tab === 'business');
-            
-            // Clear any messages
-            hideMessage();
-        }
+        function switchTab(tab, element) {
+    currentTab = tab;
+    
+    // Update active tab styling
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    element.classList.add('active');
+    
+    // Show/hide content
+    document.getElementById('whois-content').classList.toggle('active', tab === 'whois');
+    document.getElementById('business-content').classList.toggle('active', tab === 'business');
+    
+    // Clear any messages
+    hideMessage();
+}
 
         // === WHOIS Functions ===
         // Handle Enter key
