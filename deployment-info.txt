@@ -1,0 +1,27 @@
+✅ Project setup complete!
+Repository structure:
+./utils/helpers.js
+./utils/business-profile/checker.js
+./utils/blacklist_checker.js
+./package-lock.json
+./integration.js
+./config/integration.js
+./routes/business-routes.js
+./routes/business-checker/checker.js
+./auth/admin_auth.js
+./database/postgres_config.js
+./public/business-checker.html
+./public/index.html
+./server.js
+./package.json
+./server-enhanced.js
+./ai/agents/risk_assessor.js
+./ai/agents/domain_analyst.js
+./ai/agents/domain_analyst_agent.js
+./ai/agents/threat_hunter.js
+./ai/langchan_config.js
+./ai/orchestrator.js
+./frontend/src/app.js
+./server-blacklist-enhanced.js
+./index.html
+./railway.json
