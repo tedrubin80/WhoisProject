@@ -1,344 +1,712 @@
-<!--
-FILE LOCATION: /public/index.html
-FILE NAME: index.html
-PURPOSE: Standalone HTML Dashboard for WHOIS Intelligence
-DESCRIPTION: Complete HTML/JS dashboard that works without React build process
-VERSION: 2.0.0
-USAGE: Save as public/index.html in your main project directory
-DEPENDENCIES: CDN imports (React, Tailwind, Lucide icons)
--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WHOIS Intelligence Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide-react/0.263.1/umd/lucide-react.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>WHOIS Intelligence & Business Checker</title>
     <style>
-        .animate-spin {
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --dark-bg: #111827;
+            --light-bg: #1f2937;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --border-color: #374151;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 40px 0;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 12px;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .tab.active {
+            color: var(--text-primary);
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--primary-color);
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        /* Main Content */
+        .main-section {
+            background: var(--light-bg);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .domain-input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .domain-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--dark-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .domain-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .analyze-btn {
+            padding: 12px 30px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .analyze-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .analyze-btn:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+        }
+
+        /* Analysis Options */
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .option-card {
+            background: var(--dark-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .option-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        .option-card h4 {
+            font-size: 1rem;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+        }
+
+        .option-card p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* Results Section */
+        .results-section {
+            background: var(--light-bg);
+            border-radius: 12px;
+            padding: 30px;
+            display: none;
+        }
+
+        .result-card {
+            background: var(--dark-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .result-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .risk-badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .risk-low {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .risk-medium {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .risk-high {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            background: var(--light-bg);
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .info-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-weight: 600;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
             animation: spin 1s linear infinite;
         }
+
         @keyframes spin {
-            from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .feature-card {
+            background: var(--light-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .feature-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .feature-card ul {
+            list-style: none;
+        }
+
+        .feature-card li {
+            padding: 4px 0;
+            color: var(--text-secondary);
+        }
+
+        .feature-card li::before {
+            content: "✓ ";
+            color: var(--secondary-color);
+            font-weight: bold;
+        }
+
+        /* Messages */
+        .message {
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .message.error {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .message.success {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .message.info {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
         }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🌐 WHOIS Intelligence Suite</h1>
+            <p>Advanced Domain Analysis & Business Profile Checking</p>
+        </div>
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        const { Search, Shield, AlertTriangle, Activity, Globe, Database, TrendingUp, Eye } = lucideReact;
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('whois')">WHOIS Intelligence</button>
+            <button class="tab" onclick="switchTab('business')">Business Checker</button>
+        </div>
 
-        const WHOISIntelligenceDashboard = () => {
-            const [domain, setDomain] = useState('');
-            const [loading, setLoading] = useState(false);
-            const [analysis, setAnalysis] = useState(null);
-            const [threatData, setThreatData] = useState(null);
-            const [riskScore, setRiskScore] = useState(null);
-            const [activeTab, setActiveTab] = useState('analysis');
-            const [apiStats, setApiStats] = useState(null);
+        <!-- Message Area -->
+        <div id="message" class="message"></div>
 
-            useEffect(() => {
-                fetchApiStatus();
-            }, []);
+        <!-- WHOIS Content -->
+        <div id="whois-content">
+            <!-- Input Section -->
+            <div class="main-section">
+                <div class="input-group">
+                    <label for="domainInput">Enter Domain Name</label>
+                    <div class="domain-input-container">
+                        <input 
+                            type="text" 
+                            id="domainInput" 
+                            class="domain-input" 
+                            placeholder="example.com"
+                            onkeypress="handleEnter(event)"
+                        />
+                        <button class="analyze-btn" onclick="analyzeDomain()">
+                            Analyze Domain
+                        </button>
+                    </div>
+                </div>
 
-            const fetchApiStatus = async () => {
-                try {
-                    const response = await fetch('/api/status');
-                    const data = await response.json();
-                    setApiStats(data);
-                } catch (error) {
-                    console.error('Failed to fetch API status:', error);
+                <!-- Quick Analysis Options -->
+                <div class="options-grid">
+                    <div class="option-card" onclick="quickAnalysis('whois')">
+                        <h4>🔍 WHOIS Lookup</h4>
+                        <p>Basic domain registration info</p>
+                    </div>
+                    <div class="option-card" onclick="quickAnalysis('enhanced')">
+                        <h4>🛡️ Enhanced Analysis</h4>
+                        <p>WHOIS + Blacklist checking</p>
+                    </div>
+                    <div class="option-card" onclick="quickAnalysis('threat')">
+                        <h4>⚠️ Threat Analysis</h4>
+                        <p>Security threats & risk factors</p>
+                    </div>
+                    <div class="option-card" onclick="quickAnalysis('privacy')">
+                        <h4>🔒 Privacy Check</h4>
+                        <p>Privacy protection analysis</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features -->
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>🎯 Core Features</h3>
+                    <ul>
+                        <li>WHOIS data analysis</li>
+                        <li>DNS record lookup</li>
+                        <li>Domain age verification</li>
+                        <li>Registrar information</li>
+                        <li>Name server details</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h3>🚫 Security Checks</h3>
+                    <ul>
+                        <li>25+ Blacklist databases</li>
+                        <li>Spam detection</li>
+                        <li>Malware indicators</li>
+                        <li>Phishing detection</li>
+                        <li>IP reputation</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h3>📊 Intelligence</h3>
+                    <ul>
+                        <li>Risk scoring</li>
+                        <li>Threat assessment</li>
+                        <li>Privacy investigation</li>
+                        <li>Email security (SPF/DMARC)</li>
+                        <li>SSL certificate check</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 20px;">Analyzing domain...</p>
+            </div>
+
+            <!-- Results -->
+            <div id="results" class="results-section"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>WHOIS Intelligence Suite v2.3.0 | Powered by Advanced Domain Analysis</p>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function switchTab(tab) {
+            // Update active tab styling
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (tab === 'business') {
+                // Redirect to business checker page
+                window.location.href = '/business-checker';
+            }
+            // If WHOIS tab, stay on current page
+        }
+
+        // Handle Enter key
+        function handleEnter(event) {
+            if (event.key === 'Enter') {
+                analyzeDomain();
+            }
+        }
+
+        // Quick analysis shortcuts
+        function quickAnalysis(type) {
+            const domainInput = document.getElementById('domainInput');
+            if (!domainInput.value.trim()) {
+                showMessage('Please enter a domain name first', 'error');
+                domainInput.focus();
+                return;
+            }
+            
+            // Set analysis type and run
+            window.analysisType = type;
+            analyzeDomain();
+        }
+
+        // Main analyze function
+        async function analyzeDomain() {
+            const domainInput = document.getElementById('domainInput');
+            const domain = domainInput.value.trim();
+            
+            if (!domain) {
+                showMessage('Please enter a domain name', 'error');
+                return;
+            }
+
+            // Clean domain
+            const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            hideMessage();
+            
+            try {
+                // Determine endpoint based on analysis type
+                let endpoint = '/api/analyze';
+                if (window.analysisType === 'enhanced') {
+                    endpoint = '/api/analyze-enhanced';
+                } else if (window.analysisType === 'threat') {
+                    endpoint = '/api/threat-analysis';
+                } else if (window.analysisType === 'privacy') {
+                    endpoint = '/api/privacy-investigation';
                 }
-            };
-
-            const analyzeDomain = async () => {
-                if (!domain.trim()) return;
                 
-                setLoading(true);
-                setAnalysis(null);
-                setThreatData(null);
-                setRiskScore(null);
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': 'demo-key-12345678'
+                    },
+                    body: JSON.stringify({ domain: cleanDomain })
+                });
 
-                try {
-                    // Basic domain analysis
-                    const analysisResponse = await fetch('/api/analyze', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ domain: domain.trim() })
-                    });
-                    const analysisData = await analysisResponse.json();
-                    setAnalysis(analysisData);
-
-                    // Threat analysis (might fail if premium required)
-                    try {
-                        const threatResponse = await fetch('/api/threat-analysis', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ domain: domain.trim() })
-                        });
-                        const threatResult = await threatResponse.json();
-                        if (threatResult.success) {
-                            setThreatData(threatResult);
-                        }
-                    } catch (e) {
-                        console.log('Threat analysis not available (premium feature)');
-                    }
-
-                    // Risk score
-                    try {
-                        const riskResponse = await fetch('/api/risk-score', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ domain: domain.trim() })
-                        });
-                        const riskResult = await riskResponse.json();
-                        if (riskResult.success) {
-                            setRiskScore(riskResult);
-                        }
-                    } catch (e) {
-                        console.log('Risk scoring not available');
-                    }
-
-                } catch (error) {
-                    console.error('Analysis failed:', error);
-                } finally {
-                    setLoading(false);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            };
 
-            const getRiskColor = (level) => {
-                const colors = {
-                    low: 'text-green-600 bg-green-100',
-                    medium: 'text-yellow-600 bg-yellow-100',
-                    high: 'text-orange-600 bg-orange-100',
-                    critical: 'text-red-600 bg-red-100'
-                };
-                return colors[level] || 'text-gray-600 bg-gray-100';
-            };
+                const data = await response.json();
+                displayResults(data, cleanDomain);
+                
+            } catch (error) {
+                console.error('Analysis error:', error);
+                showMessage('Error analyzing domain. Please try again.', 'error');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
 
-            const getThreatSeverityColor = (severity) => {
-                const colors = {
-                    low: 'text-green-600',
-                    medium: 'text-yellow-600',
-                    high: 'text-orange-600',
-                    critical: 'text-red-600'
-                };
-                return colors[severity] || 'text-gray-600';
-            };
+        // Display results
+        function displayResults(data, domain) {
+            const resultsDiv = document.getElementById('results');
+            
+            // Determine risk level
+            let riskLevel = 'low';
+            let riskClass = 'risk-low';
+            
+            if (data.riskScore > 70 || data.threatScore > 70) {
+                riskLevel = 'high';
+                riskClass = 'risk-high';
+            } else if (data.riskScore > 40 || data.threatScore > 40) {
+                riskLevel = 'medium';
+                riskClass = 'risk-medium';
+            }
 
-            return React.createElement('div', { className: 'min-h-screen bg-gray-50' },
-                // Header
-                React.createElement('div', { className: 'bg-white shadow-sm border-b' },
-                    React.createElement('div', { className: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4' },
-                        React.createElement('div', { className: 'flex items-center justify-between' },
-                            React.createElement('div', { className: 'flex items-center space-x-3' },
-                                React.createElement(Shield, { className: 'h-8 w-8 text-blue-600' }),
-                                React.createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 'WHOIS Intelligence'),
-                                React.createElement('span', { className: 'text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded' }, 'v2.0 Enhanced')
-                            ),
-                            apiStats && React.createElement('div', { className: 'flex items-center space-x-4 text-sm text-gray-600' },
-                                React.createElement('span', { className: 'flex items-center' },
-                                    React.createElement('div', { className: 'w-2 h-2 bg-green-500 rounded-full mr-2' }),
-                                    apiStats.status
-                                ),
-                                React.createElement('span', null, `${apiStats.tier} tier`)
-                            )
-                        )
-                    )
-                ),
+            // Build HTML
+            let html = `
+                <div class="result-card">
+                    <div class="result-header">
+                        <div class="result-title">${domain}</div>
+                        <div class="risk-badge ${riskClass}">
+                            Risk: ${riskLevel.toUpperCase()}
+                        </div>
+                    </div>
+                    
+                    <div class="info-grid">
+            `;
 
-                React.createElement('div', { className: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6' },
-                    // Search Section
-                    React.createElement('div', { className: 'bg-white rounded-lg shadow-sm p-6 mb-6' },
-                        React.createElement('div', { className: 'flex items-center space-x-4' },
-                            React.createElement('div', { className: 'flex-1' },
-                                React.createElement('label', { 
-                                    htmlFor: 'domain', 
-                                    className: 'block text-sm font-medium text-gray-700 mb-2' 
-                                }, 'Domain Analysis'),
-                                React.createElement('div', { className: 'relative' },
-                                    React.createElement('input', {
-                                        type: 'text',
-                                        id: 'domain',
-                                        value: domain,
-                                        onChange: (e) => setDomain(e.target.value),
-                                        onKeyPress: (e) => e.key === 'Enter' && analyzeDomain(),
-                                        placeholder: 'Enter domain (e.g., example.com)',
-                                        className: 'w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent'
-                                    }),
-                                    React.createElement(Globe, { className: 'absolute left-3 top-3.5 h-5 w-5 text-gray-400' })
-                                )
-                            ),
-                            React.createElement('button', {
-                                onClick: analyzeDomain,
-                                disabled: loading || !domain.trim(),
-                                className: 'bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2'
-                            },
-                                loading ? 
-                                    React.createElement('div', { className: 'animate-spin rounded-full h-5 w-5 border-b-2 border-white' }) :
-                                    React.createElement(Search, { className: 'h-5 w-5' }),
-                                React.createElement('span', null, loading ? 'Analyzing...' : 'Analyze')
-                            )
-                        )
-                    ),
+            // Add WHOIS info if available
+            if (data.whoisData || data.summary) {
+                const whois = data.whoisData || data.summary || {};
+                html += `
+                    <div class="info-item">
+                        <div class="info-label">Registrar</div>
+                        <div class="info-value">${whois.registrar || 'Unknown'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Created</div>
+                        <div class="info-value">${formatDate(whois.creationDate) || 'Unknown'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Expires</div>
+                        <div class="info-value">${formatDate(whois.expirationDate) || 'Unknown'}</div>
+                    </div>
+                `;
+            }
 
-                    // Results Section
-                    (analysis || threatData || riskScore) && React.createElement('div', { className: 'space-y-6' },
-                        // Quick Overview Cards
-                        React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-4 gap-4' },
-                            // Domain Status
-                            React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-sm' },
-                                React.createElement('div', { className: 'flex items-center justify-between' },
-                                    React.createElement('div', null,
-                                        React.createElement('p', { className: 'text-sm text-gray-600' }, 'Domain Status'),
-                                        React.createElement('p', { className: 'text-lg font-semibold text-gray-900' }, 
-                                            analysis?.success ? 'Active' : 'Error'
-                                        )
-                                    ),
-                                    React.createElement(Activity, { 
-                                        className: `h-8 w-8 ${analysis?.success ? 'text-green-500' : 'text-red-500'}` 
-                                    })
-                                )
-                            ),
+            // Add blacklist info if available
+            if (data.blacklistAnalysis) {
+                html += `
+                    <div class="info-item">
+                        <div class="info-label">Blacklist Status</div>
+                        <div class="info-value" style="color: ${data.blacklistAnalysis.blacklisted ? 'var(--danger-color)' : 'var(--secondary-color)'}">
+                            ${data.blacklistAnalysis.blacklisted ? '⚠️ Listed' : '✅ Clean'}
+                        </div>
+                    </div>
+                `;
+            }
 
-                            // Risk Score
-                            React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-sm' },
-                                React.createElement('div', { className: 'flex items-center justify-between' },
-                                    React.createElement('div', null,
-                                        React.createElement('p', { className: 'text-sm text-gray-600' }, 'Risk Score'),
-                                        React.createElement('p', { className: 'text-lg font-semibold text-gray-900' }, 
-                                            `${riskScore?.riskScore?.totalScore || 0}/100`
-                                        ),
-                                        riskScore?.riskScore?.riskLevel && React.createElement('span', { 
-                                            className: `text-xs px-2 py-1 rounded-full ${getRiskColor(riskScore.riskScore.riskLevel)}` 
-                                        }, riskScore.riskScore.riskLevel.toUpperCase())
-                                    ),
-                                    React.createElement(TrendingUp, { className: 'h-8 w-8 text-blue-500' })
-                                )
-                            ),
+            // Add threat info if available
+            if (data.threats) {
+                html += `
+                    <div class="info-item">
+                        <div class="info-label">Threats Found</div>
+                        <div class="info-value">${data.threats.length}</div>
+                    </div>
+                `;
+            }
 
-                            // Threat Level
-                            React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-sm' },
-                                React.createElement('div', { className: 'flex items-center justify-between' },
-                                    React.createElement('div', null,
-                                        React.createElement('p', { className: 'text-sm text-gray-600' }, 'Threat Level'),
-                                        React.createElement('p', { 
-                                            className: `text-lg font-semibold ${getThreatSeverityColor(threatData?.severity)}` 
-                                        }, threatData?.severity?.toUpperCase() || 'UNKNOWN')
-                                    ),
-                                    React.createElement(AlertTriangle, { 
-                                        className: `h-8 w-8 ${getThreatSeverityColor(threatData?.severity)}` 
-                                    })
-                                )
-                            ),
+            // Add privacy info if available
+            if (data.privacyProtection) {
+                html += `
+                    <div class="info-item">
+                        <div class="info-label">Privacy Protection</div>
+                        <div class="info-value">${data.privacyProtection.isPrivate ? 'Yes' : 'No'}</div>
+                    </div>
+                `;
+            }
 
-                            // Registrar
-                            React.createElement('div', { className: 'bg-white p-4 rounded-lg shadow-sm' },
-                                React.createElement('div', { className: 'flex items-center justify-between' },
-                                    React.createElement('div', null,
-                                        React.createElement('p', { className: 'text-sm text-gray-600' }, 'Registrar'),
-                                        React.createElement('p', { className: 'text-lg font-semibold text-gray-900 truncate' }, 
-                                            analysis?.summary?.registrar || 'Unknown'
-                                        ),
-                                        analysis?.summary?.isUSRegistrar && React.createElement('span', { 
-                                            className: 'text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full' 
-                                        }, 'US-based')
-                                    ),
-                                    React.createElement(Database, { className: 'h-8 w-8 text-gray-500' })
-                                )
-                            )
-                        ),
+            html += `
+                    </div>
+                </div>
+            `;
 
-                        // Basic Analysis Display
-                        analysis && React.createElement('div', { className: 'bg-white rounded-lg shadow-sm p-6' },
-                            React.createElement('h3', { className: 'text-lg font-semibold text-gray-900 mb-4' }, 'Domain Analysis Results'),
-                            React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-6' },
-                                React.createElement('div', null,
-                                    React.createElement('h4', { className: 'text-md font-semibold text-gray-900 mb-3' }, 'WHOIS Information'),
-                                    React.createElement('div', { className: 'space-y-2 text-sm' },
-                                        React.createElement('div', null,
-                                            React.createElement('span', { className: 'text-gray-600' }, 'Domain: '),
-                                            React.createElement('span', { className: 'font-medium' }, analysis.domain)
-                                        ),
-                                        React.createElement('div', null,
-                                            React.createElement('span', { className: 'text-gray-600' }, 'Registrar: '),
-                                            React.createElement('span', { className: 'font-medium' }, analysis.summary?.registrar || 'Unknown')
-                                        ),
-                                        React.createElement('div', null,
-                                            React.createElement('span', { className: 'text-gray-600' }, 'Creation Date: '),
-                                            React.createElement('span', { className: 'font-medium' }, analysis.summary?.creationDate || 'Unknown')
-                                        ),
-                                        React.createElement('div', null,
-                                            React.createElement('span', { className: 'text-gray-600' }, 'Privacy Protected: '),
-                                            React.createElement('span', { 
-                                                className: `font-medium ${analysis.summary?.isPrivacyProtected ? 'text-orange-600' : 'text-green-600'}` 
-                                            }, analysis.summary?.isPrivacyProtected ? 'Yes' : 'No')
-                                        )
-                                    )
-                                ),
-                                React.createElement('div', null,
-                                    React.createElement('h4', { className: 'text-md font-semibold text-gray-900 mb-3' }, 'DNS Information'),
-                                    React.createElement('div', { className: 'space-y-2 text-sm' },
-                                        React.createElement('div', null,
-                                            React.createElement('span', { className: 'text-gray-600' }, 'Primary IP: '),
-                                            React.createElement('span', { className: 'font-medium font-mono' }, analysis.summary?.primaryIP || 'Unknown')
-                                        ),
-                                        analysis.summary?.geoLocation && React.createElement('div', null,
-                                            React.createElement('span', { className: 'text-gray-600' }, 'Location: '),
-                                            React.createElement('span', { className: 'font-medium' }, 
-                                                `${analysis.summary.geoLocation.city}, ${analysis.summary.geoLocation.country}`
-                                            )
-                                        ),
-                                        React.createElement('div', null,
-                                            React.createElement('span', { className: 'text-gray-600' }, 'Name Servers: '),
-                                            React.createElement('span', { className: 'font-medium' }, 
-                                                analysis.summary?.nameServers?.length || 0
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    ),
+            // Add detailed sections if available
+            if (data.threats && data.threats.length > 0) {
+                html += `
+                    <div class="result-card">
+                        <h3 style="color: var(--danger-color); margin-bottom: 15px;">⚠️ Threats Detected</h3>
+                `;
+                
+                data.threats.forEach(threat => {
+                    html += `
+                        <div style="margin-bottom: 10px; padding: 10px; background: var(--dark-bg); border-radius: 4px;">
+                            <strong>${threat.type}</strong>: ${threat.description}
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
 
-                    // Help Section
-                    !analysis && !loading && React.createElement('div', { className: 'bg-white rounded-lg shadow-sm p-6' },
-                        React.createElement('h2', { className: 'text-lg font-semibold text-gray-900 mb-4' }, 'Enhanced Features'),
-                        React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4' },
-                            React.createElement('div', { className: 'text-center p-4' },
-                                React.createElement(Shield, { className: 'h-8 w-8 text-blue-600 mx-auto mb-2' }),
-                                React.createElement('h3', { className: 'font-medium text-gray-900' }, 'Threat Intelligence'),
-                                React.createElement('p', { className: 'text-sm text-gray-600 mt-1' }, 'Advanced malware and phishing detection')
-                            ),
-                            React.createElement('div', { className: 'text-center p-4' },
-                                React.createElement(TrendingUp, { className: 'h-8 w-8 text-green-600 mx-auto mb-2' }),
-                                React.createElement('h3', { className: 'font-medium text-gray-900' }, 'Risk Scoring'),
-                                React.createElement('p', { className: 'text-sm text-gray-600 mt-1' }, 'Comprehensive domain risk assessment')
-                            ),
-                            React.createElement('div', { className: 'text-center p-4' },
-                                React.createElement(Eye, { className: 'h-8 w-8 text-purple-600 mx-auto mb-2' }),
-                                React.createElement('h3', { className: 'font-medium text-gray-900' }, 'RDAP Support'),
-                                React.createElement('p', { className: 'text-sm text-gray-600 mt-1' }, 'Modern domain registration data protocol')
-                            ),
-                            React.createElement('div', { className: 'text-center p-4' },
-                                React.createElement(Activity, { className: 'h-8 w-8 text-orange-600 mx-auto mb-2' }),
-                                React.createElement('h3', { className: 'font-medium text-gray-900' }, 'Real-time Monitoring'),
-                                React.createElement('p', { className: 'text-sm text-gray-600 mt-1' }, 'Domain change detection and alerts')
-                            )
-                        )
-                    )
-                )
-            );
-        };
+            // Add recommendations if available
+            if (data.recommendations && data.recommendations.length > 0) {
+                html += `
+                    <div class="result-card">
+                        <h3 style="color: var(--primary-color); margin-bottom: 15px;">💡 Recommendations</h3>
+                        <ul style="list-style: none;">
+                `;
+                
+                data.recommendations.forEach(rec => {
+                    html += `<li style="margin-bottom: 8px;">• ${rec}</li>`;
+                });
+                
+                html += `
+                        </ul>
+                    </div>
+                `;
+            }
 
-        ReactDOM.render(React.createElement(WHOISIntelligenceDashboard), document.getElementById('root'));
+            resultsDiv.innerHTML = html;
+            resultsDiv.style.display = 'block';
+            showMessage('Analysis complete!', 'success');
+        }
+
+        // Show/hide messages
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function hideMessage() {
+            document.getElementById('message').style.display = 'none';
+        }
+
+        // Format date helper
+        function formatDate(dateString) {
+            if (!dateString) return null;
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString();
+            } catch {
+                return dateString;
+            }
+        }
+
+        // Reset analysis type when clicking main button
+        document.addEventListener('DOMContentLoaded', function() {
+            const analyzeBtn = document.querySelector('.analyze-btn');
+            if (analyzeBtn) {
+                analyzeBtn.addEventListener('click', function() {
+                    window.analysisType = 'standard';
+                });
+            }
+        });
     </script>
 </body>
 </html>
