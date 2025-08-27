@@ -92,6 +92,15 @@
             color: var(--text-primary);
         }
 
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
         /* Main Content */
         .main-section {
             background: var(--light-bg);
@@ -151,6 +160,169 @@
         .analyze-btn:disabled {
             background: var(--border-color);
             cursor: not-allowed;
+        }
+
+        /* Business Checker Specific Styles */
+        .url-list {
+            background: var(--dark-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .url-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: var(--light-bg);
+            border-radius: 6px;
+        }
+
+        .url-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .remove-url {
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .remove-url:hover {
+            background: #dc2626;
+        }
+
+        .bulk-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .secondary-btn {
+            padding: 10px 20px;
+            background: var(--border-color);
+            color: var(--text-primary);
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .secondary-btn:hover {
+            background: #4b5563;
+        }
+
+        /* Business Results */
+        .business-result {
+            background: var(--dark-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+        }
+
+        .business-result.valid {
+            border-left: 4px solid var(--secondary-color);
+        }
+
+        .business-result.invalid {
+            border-left: 4px solid var(--danger-color);
+        }
+
+        .business-result.redirects {
+            border-left: 4px solid var(--warning-color);
+        }
+
+        .business-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .business-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .status-valid {
+            background: var(--secondary-color);
+        }
+
+        .status-invalid {
+            background: var(--danger-color);
+        }
+
+        .status-redirects {
+            background: var(--warning-color);
+        }
+
+        .business-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .detail-item {
+            font-size: 0.875rem;
+        }
+
+        .detail-label {
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .detail-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            background: var(--dark-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            background: var(--border-color);
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
         }
 
         /* Analysis Options */
@@ -367,7 +539,7 @@
         <div id="message" class="message"></div>
 
         <!-- WHOIS Content -->
-        <div id="whois-content">
+        <div id="whois-content" class="tab-content active">
             <!-- Input Section -->
             <div class="main-section">
                 <div class="input-group">
@@ -451,6 +623,100 @@
             <div id="results" class="results-section"></div>
         </div>
 
+        <!-- Business Checker Content -->
+        <div id="business-content" class="tab-content">
+            <!-- Input Section -->
+            <div class="main-section">
+                <div class="input-group">
+                    <label for="businessUrlInput">Enter Business Website URL</label>
+                    <div class="domain-input-container">
+                        <input 
+                            type="text" 
+                            id="businessUrlInput" 
+                            class="domain-input" 
+                            placeholder="https://restaurant.com or instagram.com/business"
+                            onkeypress="handleBusinessEnter(event)"
+                        />
+                        <button class="analyze-btn" onclick="addBusinessUrl()">
+                            Add URL
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bulk Actions -->
+                <div class="bulk-actions">
+                    <button class="secondary-btn" onclick="loadFromFile()">
+                        📁 Load URLs from File
+                    </button>
+                    <button class="secondary-btn" onclick="clearAllUrls()">
+                        🗑️ Clear All
+                    </button>
+                </div>
+
+                <!-- URL List -->
+                <div class="url-list" id="urlList" style="display: none;">
+                    <h3 style="margin-bottom: 15px;">URLs to Check:</h3>
+                    <div id="urlListItems"></div>
+                </div>
+
+                <!-- Check Button -->
+                <button 
+                    class="analyze-btn" 
+                    id="checkBusinessBtn" 
+                    onclick="checkAllBusinesses()" 
+                    style="width: 100%; display: none;"
+                >
+                    🚀 Start Checking All URLs
+                </button>
+            </div>
+
+            <!-- Features -->
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>📊 Business Validation</h3>
+                    <ul>
+                        <li>Website availability check</li>
+                        <li>HTTP status verification</li>
+                        <li>Redirect detection</li>
+                        <li>Error page detection</li>
+                        <li>Platform identification</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h3>📇 Information Extraction</h3>
+                    <ul>
+                        <li>Business name detection</li>
+                        <li>Email address extraction</li>
+                        <li>Phone number finding</li>
+                        <li>Social media links</li>
+                        <li>Physical address detection</li>
+                    </ul>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ Bulk Processing</h3>
+                    <ul>
+                        <li>Process 50+ URLs at once</li>
+                        <li>Anti-detection delays</li>
+                        <li>Progress tracking</li>
+                        <li>Export results to file</li>
+                        <li>Resume interrupted checks</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div class="progress-container" id="progressContainer">
+                <h3>Processing URLs...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">0 / 0 completed</div>
+            </div>
+
+            <!-- Business Results -->
+            <div id="businessResults" class="results-section"></div>
+        </div>
+
         <!-- Footer -->
         <div class="footer">
             <p>WHOIS Intelligence Suite v2.3.0 | Powered by Advanced Domain Analysis</p>
@@ -458,19 +724,27 @@
     </div>
 
     <script>
+        // Global variables
+        let businessUrls = [];
+        let currentTab = 'whois';
+
         // Tab switching
         function switchTab(tab) {
+            currentTab = tab;
+            
             // Update active tab styling
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             
-            if (tab === 'business') {
-                // Redirect to business checker page
-                window.location.href = '/business-checker';
-            }
-            // If WHOIS tab, stay on current page
+            // Show/hide content
+            document.getElementById('whois-content').classList.toggle('active', tab === 'whois');
+            document.getElementById('business-content').classList.toggle('active', tab === 'business');
+            
+            // Clear any messages
+            hideMessage();
         }
 
+        // === WHOIS Functions ===
         // Handle Enter key
         function handleEnter(event) {
             if (event.key === 'Enter') {
@@ -669,6 +943,247 @@
             resultsDiv.innerHTML = html;
             resultsDiv.style.display = 'block';
             showMessage('Analysis complete!', 'success');
+        }
+
+        // === Business Checker Functions ===
+        function handleBusinessEnter(event) {
+            if (event.key === 'Enter') {
+                addBusinessUrl();
+            }
+        }
+
+        function addBusinessUrl() {
+            const input = document.getElementById('businessUrlInput');
+            const url = input.value.trim();
+            
+            if (!url) {
+                showMessage('Please enter a URL', 'error');
+                return;
+            }
+            
+            // Check if already added
+            if (businessUrls.includes(url)) {
+                showMessage('URL already added', 'error');
+                return;
+            }
+            
+            businessUrls.push(url);
+            updateUrlList();
+            input.value = '';
+            input.focus();
+        }
+
+        function removeUrl(index) {
+            businessUrls.splice(index, 1);
+            updateUrlList();
+        }
+
+        function updateUrlList() {
+            const listContainer = document.getElementById('urlList');
+            const listItems = document.getElementById('urlListItems');
+            const checkBtn = document.getElementById('checkBusinessBtn');
+            
+            if (businessUrls.length === 0) {
+                listContainer.style.display = 'none';
+                checkBtn.style.display = 'none';
+                return;
+            }
+            
+            listContainer.style.display = 'block';
+            checkBtn.style.display = 'block';
+            
+            listItems.innerHTML = businessUrls.map((url, index) => `
+                <div class="url-item">
+                    <span>${url}</span>
+                    <button class="remove-url" onclick="removeUrl(${index})">Remove</button>
+                </div>
+            `).join('');
+        }
+
+        function clearAllUrls() {
+            businessUrls = [];
+            updateUrlList();
+            showMessage('All URLs cleared', 'info');
+        }
+
+        async function loadFromFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.txt';
+            
+            input.onchange = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                try {
+                    const text = await file.text();
+                    const urls = text.split('\n').map(url => url.trim()).filter(url => url);
+                    
+                    businessUrls = [...new Set([...businessUrls, ...urls])]; // Merge and remove duplicates
+                    updateUrlList();
+                    showMessage(`Loaded ${urls.length} URLs from file`, 'success');
+                } catch (error) {
+                    showMessage('Error reading file', 'error');
+                }
+            };
+            
+            input.click();
+        }
+
+        async function checkAllBusinesses() {
+            if (businessUrls.length === 0) {
+                showMessage('No URLs to check', 'error');
+                return;
+            }
+            
+            const resultsDiv = document.getElementById('businessResults');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            // Show progress
+            progressContainer.style.display = 'block';
+            resultsDiv.style.display = 'none';
+            resultsDiv.innerHTML = '';
+            
+            const results = [];
+            const total = businessUrls.length;
+            
+            for (let i = 0; i < total; i++) {
+                const url = businessUrls[i];
+                
+                // Update progress
+                const progress = ((i + 1) / total) * 100;
+                progressFill.style.width = progress + '%';
+                progressText.textContent = `${i + 1} / ${total} completed`;
+                
+                try {
+                    const response = await fetch('/api/business/check', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'demo-key-12345678'
+                        },
+                        body: JSON.stringify({ url })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        results.push(data.data);
+                        displayBusinessResult(data.data, resultsDiv);
+                    } else {
+                        results.push({ url, error: 'Failed to check' });
+                    }
+                    
+                } catch (error) {
+                    results.push({ url, error: error.message });
+                }
+                
+                // Add delay between requests
+                if (i < total - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+            
+            // Complete
+            progressContainer.style.display = 'none';
+            resultsDiv.style.display = 'block';
+            
+            // Add export button
+            const exportBtn = document.createElement('button');
+            exportBtn.className = 'analyze-btn';
+            exportBtn.textContent = '💾 Export Results';
+            exportBtn.onclick = () => exportResults(results);
+            resultsDiv.insertBefore(exportBtn, resultsDiv.firstChild);
+            
+            showMessage('All checks complete!', 'success');
+        }
+
+        function displayBusinessResult(result, container) {
+            const isValid = result.validity?.valid;
+            const statusClass = isValid ? 'valid' : result.validity?.status === '🔄 REDIRECTS' ? 'redirects' : 'invalid';
+            
+            const resultHtml = `
+                <div class="business-result ${statusClass}">
+                    <div class="business-header">
+                        <div>
+                            <div class="business-name">${result.business_name || 'Unknown Business'}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.875rem;">${result.url}</div>
+                        </div>
+                        <span class="status-badge status-${statusClass}">
+                            ${result.validity?.status || '⚠️ ERROR'}
+                        </span>
+                    </div>
+                    
+                    ${isValid ? `
+                        <div class="business-details">
+                            ${result.contact_info?.emails ? `
+                                <div class="detail-item">
+                                    <div class="detail-label">📧 Emails</div>
+                                    <div class="detail-value">${result.contact_info.emails.join(', ')}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${result.contact_info?.phones ? `
+                                <div class="detail-item">
+                                    <div class="detail-label">📞 Phones</div>
+                                    <div class="detail-value">${result.contact_info.phones.join(', ')}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${result.contact_info?.social_media ? `
+                                <div class="detail-item">
+                                    <div class="detail-label">🌐 Social Media</div>
+                                    <div class="detail-value">${Object.keys(result.contact_info.social_media).join(', ')}</div>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">🏷️ Platform</div>
+                                <div class="detail-value">${result.platform || 'Website'}</div>
+                            </div>
+                        </div>
+                    ` : `
+                        <div style="color: var(--text-secondary); margin-top: 10px;">
+                            Reason: ${result.validity?.reason || 'Unknown error'}
+                        </div>
+                    `}
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', resultHtml);
+        }
+
+        function exportResults(results) {
+            let text = 'Business Profile Check Results\n';
+            text += `Generated: ${new Date().toLocaleString()}\n`;
+            text += '=' .repeat(50) + '\n\n';
+            
+            results.forEach((result, index) => {
+                text += `[${index + 1}] ${result.url}\n`;
+                text += `Status: ${result.validity?.status || 'ERROR'}\n`;
+                text += `Business Name: ${result.business_name || 'Unknown'}\n`;
+                
+                if (result.contact_info) {
+                    if (result.contact_info.emails) {
+                        text += `Emails: ${result.contact_info.emails.join(', ')}\n`;
+                    }
+                    if (result.contact_info.phones) {
+                        text += `Phones: ${result.contact_info.phones.join(', ')}\n`;
+                    }
+                }
+                
+                text += '\n' + '-'.repeat(30) + '\n\n';
+            });
+            
+            // Create download
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `business_check_results_${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         // Show/hide messages
