@@ -1,133 +1,146 @@
 // utils/business-profile/checker.js
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { URL } = require('url');
 
 class BusinessProfileChecker {
   constructor() {
     this.userAgents = [
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     ];
+    
+    this.axiosConfig = {
+      timeout: 20000,
+      maxRedirects: 5,
+      validateStatus: (status) => status < 500,
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      }
+    };
   }
-
+  
   getRandomUserAgent() {
     return this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
   }
-
-  async processURL(url) {
-    try {
-      // Normalize URL
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
-      }
-
-      const platform = this.identifyPlatform(url);
-      const validity = await this.checkValidity(url);
-      
-      let businessName = 'N/A';
-      let contactInfo = {};
-      let screenshot = null;
-
-      if (validity.valid) {
-        const html = await this.fetchHTML(url);
-        businessName = this.extractBusinessName(url, html);
-        contactInfo = this.extractContactInfo(html, url);
-      }
-
-      return {
-        url: url,
-        platform: platform,
-        validity: validity,
-        business_name: businessName,
-        contact_info: contactInfo,
-        screenshot: screenshot,
-        checked_at: new Date().toISOString()
-      };
-
-    } catch (error) {
-      return {
-        url: url,
-        error: error.message,
-        status: '⚠️ ERROR',
-        checked_at: new Date().toISOString()
-      };
-    }
-  }
-
+  
   identifyPlatform(url) {
+    const urlLower = url.toLowerCase();
+    
     const platforms = {
       'instagram.com': 'Instagram',
       'facebook.com': 'Facebook',
       'fb.com': 'Facebook',
+      'shopify.com': 'Shopify',
+      'myshopify.com': 'Shopify',
       'yelp.com': 'Yelp',
       'linkedin.com': 'LinkedIn',
       'twitter.com': 'Twitter',
-      'x.com': 'Twitter/X',
-      'tiktok.com': 'TikTok',
+      'x.com': 'X (Twitter)',
       'youtube.com': 'YouTube',
-      'shopify.com': 'Shopify',
-      'myshopify.com': 'Shopify',
-      'squarespace.com': 'Squarespace',
+      'tiktok.com': 'TikTok',
+      'pinterest.com': 'Pinterest',
+      'etsy.com': 'Etsy',
       'wix.com': 'Wix',
-      'wordpress.com': 'WordPress'
+      'squarespace.com': 'Squarespace',
+      'wordpress.com': 'WordPress',
+      'blogspot.com': 'Blogger',
+      'medium.com': 'Medium',
+      'github.com': 'GitHub',
+      'behance.net': 'Behance',
+      'dribbble.com': 'Dribbble'
     };
-
-    const domain = url.toLowerCase();
-    for (const [key, value] of Object.entries(platforms)) {
-      if (domain.includes(key)) {
-        return value;
+    
+    for (const [domain, platform] of Object.entries(platforms)) {
+      if (urlLower.includes(domain)) {
+        return platform;
       }
     }
+    
     return 'Website';
   }
-
-  async checkValidity(url) {
+  
+  async validateURL(url) {
     try {
       const response = await axios.get(url, {
-        timeout: 15000,
-        maxRedirects: 5,
-        validateStatus: (status) => status < 500,
+        ...this.axiosConfig,
         headers: {
-          'User-Agent': this.getRandomUserAgent(),
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
+          ...this.axiosConfig.headers,
+          'User-Agent': this.getRandomUserAgent()
         }
       });
-
-      // Check for specific error patterns in content
-      const content = response.data || '';
+      
+      const contentType = response.headers['content-type'] || '';
+      const isHTMLContent = contentType.includes('text/html') || contentType.includes('text/plain');
+      
+      if (!isHTMLContent && response.status === 200) {
+        return {
+          status: '⚠️ NON-HTML',
+          valid: false,
+          code: response.status,
+          reason: 'Not a webpage (might be an API or file)'
+        };
+      }
+      
+      // Check for common error indicators in the response
+      const content = response.data.toString();
       const contentLower = content.toLowerCase();
       
-      // Check for "not found" indicators
-      const notFoundIndicators = [
+      const errorIndicators = [
         'page not found',
-        'not found',
         '404 error',
-        'doesn\'t exist',
-        'no longer available',
+        'this page isn\'t available',
+        'this page may have been removed',
         'profile not found',
         'user not found',
-        'this account doesn\'t exist'
+        'this account doesn\'t exist',
+        'content unavailable',
+        'sorry, this page isn\'t available',
+        'the link you followed may be broken'
       ];
       
-      // Check HTTP status codes
+      const loginRequiredIndicators = [
+        'log in to continue',
+        'sign in required',
+        'please log in',
+        'must be logged in',
+        'login required'
+      ];
+      
+      const notFoundIndicators = [
+        'profile may have been deleted',
+        'account suspended',
+        'profile unavailable',
+        'no longer available',
+        'deactivated'
+      ];
+      
       if (response.status === 404) {
         return {
-          status: '❌ INVALID',
+          status: '❌ NOT FOUND',
           valid: false,
           code: 404,
           reason: 'Page not found'
         };
       }
       
-      if (response.status === 403 || response.status === 401) {
+      if (errorIndicators.some(indicator => contentLower.includes(indicator))) {
         return {
-          status: '🔐 GATED',
+          status: '❌ NOT FOUND',
+          valid: false,
+          code: response.status,
+          reason: 'Error page detected'
+        };
+      }
+      
+      if (loginRequiredIndicators.some(indicator => contentLower.includes(indicator))) {
+        return {
+          status: '🔒 LOGIN REQUIRED',
           valid: false,
           code: response.status,
           reason: 'Login required'
@@ -197,167 +210,194 @@ class BusinessProfileChecker {
   async fetchHTML(url) {
     try {
       const response = await axios.get(url, {
-        timeout: 15000,
+        ...this.axiosConfig,
         headers: {
+          ...this.axiosConfig.headers,
           'User-Agent': this.getRandomUserAgent()
         }
       });
+      
       return response.data;
     } catch (error) {
+      console.error(`Error fetching HTML for ${url}:`, error.message);
       return '';
     }
   }
   
   extractBusinessName(url, html) {
-    try {
-      const $ = cheerio.load(html);
-      
-      // Try multiple selectors in order of preference
-      const selectors = [
-        'meta[property="og:site_name"]',
-        'meta[property="og:title"]',
-        'meta[name="twitter:title"]',
-        'title',
-        'h1',
-        '.business-name',
-        '.company-name',
-        '#business-name'
-      ];
-      
-      for (const selector of selectors) {
-        let name;
+    const $ = cheerio.load(html);
+    const platform = this.identifyPlatform(url);
+    
+    let businessName = 'Unknown Business';
+    
+    // Platform-specific extraction
+    switch (platform) {
+      case 'Instagram':
+        businessName = $('meta[property="og:title"]').attr('content') ||
+                      $('title').text() ||
+                      $('h1').first().text();
+        businessName = businessName.replace(/ • Instagram.*$/i, '').trim();
+        break;
         
-        if (selector.startsWith('meta')) {
-          name = $(selector).attr('content');
-        } else {
-          name = $(selector).first().text();
-        }
+      case 'Facebook':
+        businessName = $('meta[property="og:title"]').attr('content') ||
+                      $('title').text() ||
+                      $('h1').first().text();
+        businessName = businessName.replace(/ - Home | Facebook.*$/i, '').trim();
+        break;
         
-        if (name) {
-          // Clean up the name
-          name = name.trim()
-            .replace(/\s+/g, ' ')
-            .replace(/\|.*$/, '')
-            .replace(/[-–—].*$/, '')
-            .replace(/[•·].*$/, '')
-            .replace(/^\W+|\W+$/g, '');
-          
-          // Filter out generic titles
-          const genericTerms = ['home', 'welcome', 'official', 'website', 'online'];
-          if (name.length > 2 && !genericTerms.includes(name.toLowerCase())) {
-            return name;
-          }
-        }
-      }
-      
-      // Platform-specific extraction
-      const platform = this.identifyPlatform(url);
-      
-      if (platform === 'Instagram') {
-        const profileName = $('meta[property="og:title"]').attr('content');
-        if (profileName && profileName.includes('@')) {
-          return profileName.split('•')[0].trim();
-        }
-      }
-      
-      return 'Unknown Business';
-      
-    } catch (error) {
-      return 'Unknown Business';
+      case 'LinkedIn':
+        businessName = $('meta[property="og:title"]').attr('content') ||
+                      $('h1').first().text() ||
+                      $('title').text();
+        businessName = businessName.replace(/ \| LinkedIn.*$/i, '').trim();
+        break;
+        
+      case 'Yelp':
+        businessName = $('h1').first().text() ||
+                      $('meta[property="og:title"]').attr('content') ||
+                      $('title').text();
+        break;
+        
+      default:
+        // Generic extraction for websites
+        businessName = $('meta[property="og:site_name"]').attr('content') ||
+                      $('meta[property="og:title"]').attr('content') ||
+                      $('meta[name="author"]').attr('content') ||
+                      $('h1').first().text() ||
+                      $('title').text() ||
+                      businessName;
     }
+    
+    // Clean up the business name
+    businessName = businessName
+      .replace(/[\n\r]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // If still no name, try to extract from URL
+    if (businessName === 'Unknown Business' || !businessName) {
+      const urlParts = url.split('/');
+      const username = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+      if (username && username.length > 2) {
+        businessName = username.replace(/[_\-\.]/g, ' ').trim();
+      }
+    }
+    
+    return businessName || 'Unknown Business';
   }
   
   extractContactInfo(html, url) {
+    const $ = cheerio.load(html);
+    const contactInfo = {
+      emails: [],
+      phones: [],
+      social_media: {},
+      address: null
+    };
+    
+    // Email extraction
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const emails = html.match(emailRegex) || [];
+    contactInfo.emails = [...new Set(emails)]
+      .filter(email => !email.includes('example.com') && !email.includes('@2x'));
+    
+    // Phone extraction
+    const phoneRegex = /(\+?1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
+    const phones = html.match(phoneRegex) || [];
+    contactInfo.phones = [...new Set(phones)]
+      .map(phone => phone.replace(/[^\d+]/g, '').replace(/^1/, ''))
+      .filter(phone => phone.length >= 10);
+    
+    // Social media extraction
+    const socialPatterns = {
+      'Facebook': /(?:https?:\/\/)?(?:www\.)?facebook\.com\/([^\/\s]+)/g,
+      'Instagram': /(?:https?:\/\/)?(?:www\.)?instagram\.com\/([^\/\s]+)/g,
+      'Twitter': /(?:https?:\/\/)?(?:www\.)?twitter\.com\/([^\/\s]+)/g,
+      'LinkedIn': /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(?:company|in)\/([^\/\s]+)/g,
+      'YouTube': /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:c|channel|user)\/([^\/\s]+)/g
+    };
+    
+    for (const [platform, regex] of Object.entries(socialPatterns)) {
+      const matches = html.match(regex);
+      if (matches && matches.length > 0) {
+        // Get the first valid match
+        const username = matches[0].match(/\/([^\/\s]+)$/);
+        if (username && username[1]) {
+          contactInfo.social_media[platform] = username[1];
+        }
+      }
+    }
+    
+    // Address extraction (basic)
+    const addressPatterns = [
+      /\d+\s+[\w\s]+(?:street|st|avenue|ave|road|rd|lane|ln|drive|dr|court|ct|plaza|plz)\b/gi,
+      /\d+\s+[\w\s]+,\s+[\w\s]+,\s+[A-Z]{2}\s+\d{5}/gi
+    ];
+    
+    for (const pattern of addressPatterns) {
+      const addressMatch = html.match(pattern);
+      if (addressMatch) {
+        contactInfo.address = addressMatch[0].trim();
+        break;
+      }
+    }
+    
+    return contactInfo;
+  }
+  
+  async processURL(url) {
     try {
-      const $ = cheerio.load(html);
-      const info = {
+      // Ensure URL has protocol
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      
+      const validity = await this.validateURL(url);
+      
+      let businessName = 'Unknown Business';
+      let contactInfo = {
         emails: [],
         phones: [],
         social_media: {},
-        addresses: []
+        address: null
       };
+      let platform = this.identifyPlatform(url);
       
-      // Extract text content
-      const textContent = $('body').text();
-      
-      // Email extraction
-      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-      const foundEmails = textContent.match(emailRegex) || [];
-      
-      // Filter out common non-business emails
-      const excludedDomains = ['example.com', 'email.com', 'domain.com', 'sentry.io', 'google.com', 'facebook.com'];
-      const excludedPrefixes = ['noreply', 'no-reply', 'donotreply', 'mailer-daemon', 'postmaster', 'abuse', 'admin@'];
-      
-      info.emails = [...new Set(foundEmails)]
-        .filter(email => {
-          const emailLower = email.toLowerCase();
-          return !excludedDomains.some(domain => emailLower.includes(domain)) &&
-                 !excludedPrefixes.some(prefix => emailLower.startsWith(prefix));
-        })
-        .slice(0, 5); // Limit to 5 emails
-      
-      // Phone extraction
-      const phoneRegex = /(\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
-      const foundPhones = textContent.match(phoneRegex) || [];
-      
-      info.phones = [...new Set(foundPhones)]
-        .map(phone => phone.replace(/\D/g, ''))
-        .filter(phone => phone.length >= 10 && phone.length <= 11)
-        .map(phone => {
-          if (phone.length === 10) {
-            return `(${phone.slice(0,3)}) ${phone.slice(3,6)}-${phone.slice(6)}`;
-          }
-          return `+${phone[0]} (${phone.slice(1,4)}) ${phone.slice(4,7)}-${phone.slice(7)}`;
-        })
-        .slice(0, 3); // Limit to 3 phones
-      
-      // Social media extraction
-      const socialPatterns = {
-        facebook: /(?:https?:\/\/)?(?:www\.)?facebook\.com\/([A-Za-z0-9.]+)/,
-        instagram: /(?:https?:\/\/)?(?:www\.)?instagram\.com\/([A-Za-z0-9_.]+)/,
-        twitter: /(?:https?:\/\/)?(?:www\.)?(?:twitter|x)\.com\/([A-Za-z0-9_]+)/,
-        linkedin: /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(?:company|in)\/([A-Za-z0-9-]+)/,
-        youtube: /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:c|channel|user)\/([A-Za-z0-9_-]+)/
-      };
-      
-      // Search in links
-      $('a[href]').each((i, elem) => {
-        const href = $(elem).attr('href');
-        if (!href) return;
-        
-        for (const [platform, pattern] of Object.entries(socialPatterns)) {
-          const match = href.match(pattern);
-          if (match && match[1]) {
-            info.social_media[platform] = match[0];
-            break;
-          }
-        }
-      });
-      
-      // Address extraction (basic)
-      const addressPatterns = [
-        /\d+\s+[\w\s]+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|plaza|pl)\b/gi,
-        /\d+\s+[\w\s]+,\s*[\w\s]+,\s*[A-Z]{2}\s+\d{5}/gi
-      ];
-      
-      for (const pattern of addressPatterns) {
-        const matches = textContent.match(pattern) || [];
-        info.addresses.push(...matches);
+      // Only extract additional info if the URL is valid
+      if (validity.valid || validity.status === '🔄 REDIRECTS') {
+        const html = await this.fetchHTML(validity.finalUrl || url);
+        businessName = this.extractBusinessName(validity.finalUrl || url, html);
+        contactInfo = this.extractContactInfo(html, validity.finalUrl || url);
       }
       
-      info.addresses = [...new Set(info.addresses)].slice(0, 2); // Limit to 2 addresses
-      
-      // Clean up empty arrays
-      if (info.emails.length === 0) delete info.emails;
-      if (info.phones.length === 0) delete info.phones;
-      if (Object.keys(info.social_media).length === 0) delete info.social_media;
-      if (info.addresses.length === 0) delete info.addresses;
-      
-      return info;
+      return {
+        url: url,
+        business_name: businessName,
+        platform: platform,
+        validity: validity,
+        contact_info: contactInfo,
+        checked_at: new Date().toISOString()
+      };
       
     } catch (error) {
-      console.error('Error extracting contact info:', error);
-      return {};
+      return {
+        url: url,
+        business_name: 'Error',
+        platform: this.identifyPlatform(url),
+        validity: {
+          status: '⚠️ ERROR',
+          valid: false,
+          reason: error.message
+        },
+        contact_info: {
+          emails: [],
+          phones: [],
+          social_media: {},
+          address: null
+        },
+        checked_at: new Date().toISOString()
+      };
     }
   }
 }
