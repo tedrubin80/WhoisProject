@@ -17,8 +17,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Import business routes
+// Import business routes and validation
 const businessRoutes = require('./routes/business-routes');
+const { validate, domainSchema } = require('./utils/validation');
 
 // Middleware
 app.use(helmet({
@@ -52,23 +53,54 @@ const limiter = rateLimit({
 
 app.use('/api/', limiter);
 
-// API Key Authentication
-const authenticateAPIKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  const validApiKeys = [
-    'demo-key-12345678',
-    process.env.API_KEY_1,
-    process.env.API_KEY_2,
-    process.env.API_KEY_3
-  ].filter(Boolean);
+// Validate API Keys on Startup
+const validApiKeys = [
+  process.env.API_KEY_1,
+  process.env.API_KEY_2,
+  process.env.API_KEY_3,
+  process.env.API_KEY_4,
+  process.env.API_KEY_5
+].filter(key => key && key.length >= 16); // Minimum 16 characters for security
 
-  if (!apiKey || !validApiKeys.includes(apiKey)) {
+if (validApiKeys.length === 0) {
+  console.error('⚠️  WARNING: No valid API keys configured!');
+  console.error('⚠️  Set at least one API_KEY_* environment variable (minimum 16 characters)');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('⚠️  Cannot start in production without API keys!');
+    process.exit(1);
+  } else {
+    console.warn('⚠️  Running in development mode without API keys - authentication disabled');
+  }
+}
+
+// API Key Authentication Middleware
+const authenticateAPIKey = (req, res, next) => {
+  // Skip authentication in test mode
+  if (process.env.NODE_ENV === 'test') {
+    return next();
+  }
+
+  // If no API keys configured in dev mode, allow through with warning
+  if (validApiKeys.length === 0 && process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+
+  if (!apiKey) {
     return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Valid API key required'
+      error: 'Missing API key',
+      message: 'Please provide an API key in the x-api-key header or apiKey query parameter'
     });
   }
-  
+
+  if (!validApiKeys.includes(apiKey)) {
+    return res.status(401).json({
+      error: 'Invalid API key',
+      message: 'The provided API key is not valid'
+    });
+  }
+
   next();
 };
 
@@ -202,14 +234,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.post('/api/analyze', authenticateAPIKey, async (req, res) => {
+app.post('/api/analyze', authenticateAPIKey, validate(domainSchema), async (req, res) => {
   try {
     const { domain } = req.body;
-    
-    if (!domain) {
-      return res.status(400).json({ error: 'Domain is required' });
-    }
 
+    // Clean domain (validation ensures it's present and valid format)
     const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
     
     const cacheKey = `whois_${cleanDomain}`;
@@ -250,8 +279,8 @@ app.post('/api/analyze', authenticateAPIKey, async (req, res) => {
   }
 });
 
-// Business Profile Checker Routes
-app.use(businessRoutes);
+// Business Profile Checker Routes (with authentication)
+app.use('/api/business', authenticateAPIKey, businessRoutes);
 
 // Static Files
 app.get('/', (req, res) => {
@@ -267,11 +296,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`🚀 WHOIS Intelligence Server v2.3.0 running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔐 API Key authentication: Enabled`);
-  console.log(`💼 Business Profile Checker: Enabled`);
-  console.log(`🌐 Access at: http://localhost:${PORT}`);
-});
+// Start Server (only if not being imported for testing)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 WHOIS Intelligence Server v2.3.0 running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔐 API Key authentication: Enabled`);
+    console.log(`💼 Business Profile Checker: Enabled`);
+    console.log(`🌐 Access at: http://localhost:${PORT}`);
+  });
+}
+
+// Export for testing
+module.exports = app;

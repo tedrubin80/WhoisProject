@@ -12,3 +12,5 @@ logs/
 *.pid.lock
 .npm
 .eslintcache
+coverage/
+.nyc_output/
