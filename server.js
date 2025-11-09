@@ -63,14 +63,10 @@ const validApiKeys = [
 ].filter(key => key && key.length >= 16); // Minimum 16 characters for security
 
 if (validApiKeys.length === 0) {
-  console.error('⚠️  WARNING: No valid API keys configured!');
-  console.error('⚠️  Set at least one API_KEY_* environment variable (minimum 16 characters)');
-  if (process.env.NODE_ENV === 'production') {
-    console.error('⚠️  Cannot start in production without API keys!');
-    process.exit(1);
-  } else {
-    console.warn('⚠️  Running in development mode without API keys - authentication disabled');
-  }
+  console.warn('⚠️  WARNING: No valid API keys configured!');
+  console.warn('⚠️  Set at least one API_KEY_* environment variable (minimum 16 characters)');
+  console.warn('⚠️  Running without API key authentication - suitable for development/demo only');
+  console.warn('⚠️  For production use, configure at least one API_KEY_* environment variable');
 }
 
 // API Key Authentication Middleware
@@ -80,8 +76,8 @@ const authenticateAPIKey = (req, res, next) => {
     return next();
   }
 
-  // If no API keys configured in dev mode, allow through with warning
-  if (validApiKeys.length === 0 && process.env.NODE_ENV !== 'production') {
+  // If no API keys configured, skip authentication (development/demo mode)
+  if (validApiKeys.length === 0) {
     return next();
   }
 
@@ -301,7 +297,7 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`🚀 WHOIS Intelligence Server v2.3.0 running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔐 API Key authentication: Enabled`);
+    console.log(`🔐 API Key authentication: ${validApiKeys.length > 0 ? 'Enabled' : 'Disabled (Demo Mode)'}`);
     console.log(`💼 Business Profile Checker: Enabled`);
     console.log(`🌐 Access at: http://localhost:${PORT}`);
   });
